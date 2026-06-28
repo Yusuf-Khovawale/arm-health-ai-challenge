@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 function App() {
   const [inputs, setInputs] = useState({
@@ -13,12 +14,23 @@ function App() {
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
 
-  // Simulate model loading
+  // Load history from localStorage
   useEffect(() => {
     setTimeout(() => {
       setModelLoaded(true);
     }, 1000);
+
+    const savedHistory = localStorage.getItem('healthHistory');
+    if (savedHistory) {
+      try {
+        setHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        console.log('Could not load history');
+      }
+    }
   }, []);
 
   const handleInputChange = (e) => {
@@ -29,45 +41,70 @@ function App() {
     }));
   };
 
-const makePrediction = async () => {
+  const makePrediction = async () => {
     setLoading(true);
     
-    // Simulate inference
     setTimeout(() => {
-      // Better risk calculation
       let riskScore = 0;
       
-      // Age factor (0-100)
       if (inputs.age > 60) riskScore += 25;
       else if (inputs.age > 45) riskScore += 15;
       
-      // Heart Rate factor (0-100)
       if (inputs.heartRate > 100) riskScore += 30;
       else if (inputs.heartRate > 85) riskScore += 15;
       
-      // Blood Pressure factor (0-100)
       if (inputs.bloodPressure > 140) riskScore += 30;
       else if (inputs.bloodPressure > 120) riskScore += 15;
       
-      // Cholesterol factor (0-100)
       if (inputs.cholesterol > 240) riskScore += 20;
       else if (inputs.cholesterol > 200) riskScore += 10;
       
-      // Normalize to 0-100
       riskScore = Math.min(100, riskScore);
 
       const riskLevel = riskScore > 70 ? 'High' : riskScore > 40 ? 'Medium' : 'Low';
       const color = riskScore > 70 ? '#e74c3c' : riskScore > 40 ? '#f39c12' : '#27ae60';
+      const timestamp = new Date().toLocaleTimeString();
+      const date = new Date().toLocaleDateString();
 
-      setPrediction({
-        score: Math.min(100, Math.round(riskScore)),
+      const newPrediction = {
+        score: Math.round(riskScore),
         level: riskLevel,
         color: color,
-        timestamp: new Date().toLocaleTimeString()
-      });
+        timestamp: timestamp,
+        date: date,
+        heartRate: inputs.heartRate,
+        bloodPressure: inputs.bloodPressure,
+      };
+
+      setPrediction(newPrediction);
+
+      // Add to history
+      const newHistory = [
+        ...history,
+        {
+          time: timestamp,
+          date: date,
+          riskScore: Math.round(riskScore),
+          heartRate: inputs.heartRate,
+          bloodPressure: inputs.bloodPressure,
+        }
+      ];
+
+      // Keep only last 20 entries
+      const limitedHistory = newHistory.slice(-20);
+      setHistory(limitedHistory);
+      localStorage.setItem('healthHistory', JSON.stringify(limitedHistory));
 
       setLoading(false);
     }, 500);
+  };
+
+  const clearHistory = () => {
+    if (window.confirm('Clear all health history?')) {
+      setHistory([]);
+      localStorage.removeItem('healthHistory');
+      setShowHistory(false);
+    }
   };
 
   return (
@@ -83,6 +120,9 @@ const makePrediction = async () => {
             <span className="status-online">✅ Model Loaded</span>
           ) : (
             <span className="status-loading">⏳ Loading Model...</span>
+          )}
+          {history.length > 0 && (
+            <span className="history-count">📊 {history.length} predictions</span>
           )}
         </div>
 
@@ -127,39 +167,7 @@ const makePrediction = async () => {
             />
             <span className="value">{inputs.heartRate}</span>
           </div>
-{prediction && prediction.level === 'High' && (
-          <div className="hospital-section">
-            <h2>🏥 Nearby Hospitals</h2>
-            <div className="hospital-list">
-              <div className="hospital-card">
-                <div className="hospital-name">Cambridge University Hospital</div>
-                <div className="hospital-distance">📍 1.2 km away</div>
-                <div className="hospital-availability">
-                  <span className="available">✅ Emergency: Available</span>
-                </div>
-                <button className="contact-btn">Call: 999</button>
-              </div>
 
-              <div className="hospital-card">
-                <div className="hospital-name">Addenbrooke's Hospital</div>
-                <div className="hospital-distance">📍 2.5 km away</div>
-                <div className="hospital-availability">
-                  <span className="available">✅ Emergency: Available</span>
-                </div>
-                <button className="contact-btn">Call: 999</button>
-              </div>
-
-              <div className="hospital-card">
-                <div className="hospital-name">Royal Papworth Hospital</div>
-                <div className="hospital-distance">📍 3.1 km away</div>
-                <div className="hospital-availability">
-                  <span className="available">✅ Cardiology: Available</span>
-                </div>
-                <button className="contact-btn">Call: 999</button>
-              </div>
-            </div>
-          </div>
-        )}
           <div className="input-group">
             <label>Blood Pressure (mmHg)</label>
             <input
@@ -228,12 +236,113 @@ const makePrediction = async () => {
           </div>
         )}
 
+        {prediction && prediction.level === 'High' && (
+          <div className="hospital-section">
+            <h2>🏥 Nearby Hospitals</h2>
+            <div className="hospital-list">
+              <div className="hospital-card">
+                <div className="hospital-name">Cambridge University Hospital</div>
+                <div className="hospital-distance">📍 1.2 km away</div>
+                <div className="hospital-availability">
+                  <span className="available">✅ Emergency: Available</span>
+                </div>
+                <button className="contact-btn">Call: 999</button>
+              </div>
+
+              <div className="hospital-card">
+                <div className="hospital-name">Addenbrooke's Hospital</div>
+                <div className="hospital-distance">📍 2.5 km away</div>
+                <div className="hospital-availability">
+                  <span className="available">✅ Emergency: Available</span>
+                </div>
+                <button className="contact-btn">Call: 999</button>
+              </div>
+
+              <div className="hospital-card">
+                <div className="hospital-name">Royal Papworth Hospital</div>
+                <div className="hospital-distance">📍 3.1 km away</div>
+                <div className="hospital-availability">
+                  <span className="available">✅ Cardiology: Available</span>
+                </div>
+                <button className="contact-btn">Call: 999</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {history.length > 0 && (
+          <div className="history-section">
+            <div className="history-header">
+              <h2>📊 Health History</h2>
+              <button 
+                className="toggle-btn"
+                onClick={() => setShowHistory(!showHistory)}
+              >
+                {showHistory ? '▼ Hide' : '▶ Show'}
+              </button>
+            </div>
+
+            {showHistory && (
+              <>
+                <div className="chart-container">
+                  <h3>Risk Score Trend</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={history}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="time" 
+                        tick={{ fontSize: 12 }}
+                      />
+                      <YAxis domain={[0, 100]} />
+                      <Tooltip />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="riskScore" 
+                        stroke="#667eea" 
+                        dot={{ fill: '#667eea', r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="history-stats">
+                  <div className="stat-card">
+                    <div className="stat-label">Average Risk</div>
+                    <div className="stat-value">
+                      {Math.round(history.reduce((a, b) => a + b.riskScore, 0) / history.length)}
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Peak Risk</div>
+                    <div className="stat-value">
+                      {Math.max(...history.map(h => h.riskScore))}
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Total Checks</div>
+                    <div className="stat-value">
+                      {history.length}
+                    </div>
+                  </div>
+                </div>
+
+                <button className="clear-btn" onClick={clearHistory}>
+                  🗑️ Clear History
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="info-box">
           <h3>About This App</h3>
           <p>✅ Runs offline - no internet needed</p>
           <p>✅ TensorFlow Lite model optimized for ARM</p>
           <p>✅ Privacy-first - data stays on your device</p>
           <p>✅ Real-time predictions</p>
+          <p>✅ Health history tracked locally</p>
         </div>
       </div>
     </div>
