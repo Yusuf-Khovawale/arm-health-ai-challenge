@@ -77,7 +77,25 @@ function App() {
       };
 
       setPrediction(newPrediction);
-
+// Send to cloud backend
+      try {
+        fetch('http://localhost:8000/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            device_id: 'device-' + Math.random().toString(36).substr(2, 9),
+            risk_score: Math.round(riskScore),
+            heart_rate: inputs.heartRate,
+            blood_pressure: inputs.bloodPressure,
+            location: 'Cambridge'
+          })
+        })
+        .then(res => res.json())
+        .then(data => console.log('✅ Sent to cloud:', data))
+        .catch(err => console.log('Cloud sync (optional):', err));
+      } catch (e) {
+        console.log('Cloud sync error (offline ok):', e);
+      }
       // Add to history
       const newHistory = [
         ...history,
