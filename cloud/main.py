@@ -11,12 +11,21 @@ from typing import List
 from datetime import datetime, timedelta
 import sqlite3
 import json
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+from performance_metrics import perf_db, PerformanceMetric, PerformanceStats
+from typing import Optional
 
 app = FastAPI(
     title="Health Monitoring Cloud",
     description="Aggregates health data from ARM edge devices",
     version="1.0.0"
 )
+@app.get("/dashboard.html")
+def get_dashboard():
+    """Serve dashboard HTML"""
+    return FileResponse("dashboard.html")
 # Enable CORS for mobile app
 app.add_middleware(
     CORSMiddleware,
@@ -229,6 +238,57 @@ def test_prediction():
         location="Cambridge"
     )
     return receive_prediction(test_data)
+# ============================================================================
+# WEEK 5: PERFORMANCE METRICS ENDPOINTS
+# ============================================================================
+
+@app.get("/performance/benchmark")
+async def get_benchmark_data():
+    """Get ARM optimization benchmarks"""
+    return perf_db.get_benchmark_data()
+
+@app.get("/performance/summary")
+async def get_performance_summary():
+    """Performance summary for dashboard display"""
+    benchmark = perf_db.get_benchmark_data()
+    latency_stats = perf_db.get_metric_stats("latency")
+    power_stats = perf_db.get_metric_stats("power")
+    
+    return {
+        "headline": "ARM Cortex-A enables real-time health monitoring at the edge",
+        "optimization": {
+            "original_model_size_mb": benchmark.original_size_mb,
+            "optimized_model_size_mb": benchmark.model_size_mb,
+            "compression_percent": round(benchmark.compression_ratio, 1),
+        },
+        "performance": {
+            "inference_latency_ms": latency_stats.current_value,
+            "latency_avg_ms": latency_stats.avg_value,
+            "power_consumption_mw": power_stats.current_value,
+            "power_avg_mw": power_stats.avg_value,
+            "accuracy_percent": 89.2
+        }
+    }
+
+@app.get("/performance/metrics")
+async def get_all_performance_metrics(metric_type: Optional[str] = None, device_id: Optional[str] = None):
+    """Get all performance metrics, optionally filtered"""
+    metrics = perf_db.get_all_metrics()
+    
+    if metric_type:
+        metrics = [m for m in metrics if m.metric_type == metric_type]
+    if device_id:
+        metrics = [m for m in metrics if m.device_id == device_id]
+    
+    return {"count": len(metrics), "metrics": metrics}
+
+@app.get("/performance/stats/{metric_type}")
+async def get_performance_stats(metric_type: str, device_id: Optional[str] = None):
+    """Get aggregated statistics for a performance metric"""
+    stats = perf_db.get_metric_stats(metric_type, device_id)
+    if not stats:
+        raise HTTPException(status_code=404, detail=f"No data for {metric_type}")
+    return stats
 
 if __name__ == "__main__":
     import uvicorn
